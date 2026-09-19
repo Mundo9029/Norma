@@ -45,7 +45,7 @@
   }
   tr:not(:last-child) td { border-bottom: 1px solid rgba(255,255,255,.15); }
   td img {
-    width: 70px; height: 70px; object-fit: cover;
+    width: 60px; height: 60px; object-fit: cover;
     border-radius: 10px; border: 2px solid #ff6ec7;
     filter: saturate(1.5) contrast(1.2);
   }
@@ -57,10 +57,10 @@
   }
   .btn-editar { background: #f39c12; color: #fff; }
   .btn-borrar { background: #e74c3c; color: #fff; }
+  .btn-borrar:disabled { background: #999; cursor: wait; }
 
   .vacio { text-align: center; padding: 40px; opacity: .8; }
 
-  /* Modal de edición */
   .overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.8);
     display: none; align-items: center; justify-content: center; z-index: 100;
@@ -108,7 +108,6 @@
     </table>
   </div>
 
-  <!-- Modal editar -->
   <div class="overlay" id="overlayEditar">
     <div class="modal">
       <h2>✏️ Editar producto</h2>
@@ -122,6 +121,9 @@
   </div>
 
 <script>
+  // 👇 CAMBIA ESTO por la URL de tu Worker
+  const WORKER_URL = "https://tu-worker.tu-usuario.workers.dev";
+
   let productos = JSON.parse(localStorage.getItem('productos') || '[]');
   let idEditando = null;
 
@@ -134,19 +136,19 @@
     const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(filtro));
 
     if (filtrados.length === 0) {
-      cuerpoTabla.innerHTML = `<tr><td colspan="4" class="vacio">No hay productos${filtro ? ' que coincidan con la búsqueda' : ''}.</td></tr>`;
+      cuerpoTabla.innerHTML = `<tr><td colspan="4" class="vacio">No hay productos${filtro ? ' que coincidan' : ''}.</td></tr>`;
       return;
     }
 
     cuerpoTabla.innerHTML = filtrados.map(p => `
       <tr>
-        <td><img src="${p.imagen}" alt="${p.nombre}"></td>
+        <td><img src="${p.imagen}" alt="${p.nombre}" loading="lazy"></td>
         <td>${p.nombre}</td>
         <td>$${Number(p.precio).toLocaleString()}</td>
         <td>
           <div class="acciones">
             <button class="btn-editar" onclick="abrirEditar(${p.id})">✏️ Editar</button>
-            <button class="btn-borrar" onclick="borrarProducto(${p.id})">🗑️ Borrar</button>
+            <button class="btn-borrar" id="btn-borrar-${p.id}" onclick="borrarProducto(${p.id})">🗑️ Borrar</button>
           </div>
         </td>
       </tr>
@@ -182,8 +184,30 @@
     renderizar();
   }
 
-  function borrarProducto(id) {
+  async function borrarProducto(id) {
     if (!confirm("¿Seguro que quieres borrar este producto?")) return;
+
+    const prod = productos.find(p => p.id === id);
+    if (!prod) return;
+
+    const btn = document.getElementById(`btn-borrar-${id}`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+    // 1. Borrar la imagen del R2 (si tenemos su key)
+    if (prod.key) {
+      try {
+        await fetch(WORKER_URL + '/borrar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: prod.key })
+        });
+      } catch (e) {
+        console.error('No se pudo borrar la imagen del R2:', e);
+        // Continuamos igual: quitamos el producto del localStorage
+      }
+    }
+
+    // 2. Quitarlo del localStorage
     productos = productos.filter(p => p.id !== id);
     localStorage.setItem('productos', JSON.stringify(productos));
     renderizar();
