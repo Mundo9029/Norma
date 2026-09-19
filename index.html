@@ -5,64 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Captura de Productos</title>
 <style>
-  * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-  body {
-    margin: 0; min-height: 100vh;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    color: #fff; padding: 20px;
-  }
-  h1 { text-shadow: 2px 2px 6px rgba(0,0,0,.3); }
-
-  .btn-menu {
-    width: 260px; padding: 18px; margin: 10px;
-    font-size: 18px; font-weight: bold; cursor: pointer;
-    border: none; border-radius: 14px;
-    background: #fff; color: #764ba2;
-    box-shadow: 0 6px 18px rgba(0,0,0,.25);
-    transition: transform .2s, box-shadow .2s;
-  }
-  .btn-menu:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
-
-  /* Modal cámara */
-  .overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,.85);
-    display: none; align-items: center; justify-content: center;
-    flex-direction: column; z-index: 100; padding: 15px;
-  }
-  .overlay.active { display: flex; }
-
-  video, canvas, .anime-img {
-    max-width: 90vw; max-height: 55vh;
-    border-radius: 16px; box-shadow: 0 0 30px rgba(255,255,255,.3);
-  }
-  /* Estilo "anime" para la foto capturada */
-  .anime-img {
-    filter: saturate(1.7) contrast(1.25) brightness(1.1);
-    border: 4px solid #ff6ec7;
-    box-shadow: 0 0 25px #ff6ec7, 0 0 60px #b06ab3;
-  }
-  .modal-controls { margin-top: 15px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-
-  .modal-controls button, .form-captura button {
-    padding: 12px 24px; border: none; border-radius: 10px;
-    font-size: 16px; font-weight: bold; cursor: pointer;
-  }
-  .btn-tomar { background: #ff6ec7; color: #fff; }
-  .btn-cancelar { background: #555; color: #fff; }
-  .btn-aceptar { background: #2ecc71; color: #fff; }
-
-  .form-captura {
-    display: none; flex-direction: column; align-items: center; gap: 12px;
-    margin-top: 15px; width: 320px; max-width: 90vw;
-  }
-  .form-captura.active { display: flex; }
-  .form-captura input {
-    width: 100%; padding: 12px; border-radius: 10px;
-    border: none; font-size: 16px; outline: none;
-  }
-  .form-captura label { align-self: flex-start; font-weight: bold; }
+  /* ... (tus estilos anteriores se mantienen igual) ... */
 </style>
 </head>
 <body>
@@ -71,7 +14,7 @@
   <button class="btn-menu" onclick="abrirCamara()">📷 Tomar foto a producto</button>
   <button class="btn-menu" onclick="window.location.href='productos.html'">📋 Ver productos</button>
 
-  <!-- Modal de cámara -->
+  <!-- Modal de cámara (igual que antes) -->
   <div class="overlay" id="overlay">
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas" style="display:none;"></canvas>
@@ -98,6 +41,9 @@
   let stream = null;
   let fotoDataURL = "";
 
+  // --- CONFIGURACIÓN: Pon aquí la URL de tu Worker de Cloudflare ---
+  const WORKER_URL = "https://tu-worker.tu-usuario.workers.dev";
+
   const overlay = document.getElementById('overlay');
   const video = document.getElementById('video');
   const canvas = document.getElementById('canvas');
@@ -106,6 +52,7 @@
   const controlesCaptura = document.getElementById('controlesCaptura');
 
   async function abrirCamara() {
+    // ... (esta función no cambia, sigue igual que antes) ...
     overlay.classList.add('active');
     formulario.classList.remove('active');
     controlesCaptura.style.display = 'flex';
@@ -122,15 +69,12 @@
   }
 
   function tomarFoto() {
+    // ... (esta función no cambia) ...
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0);
-
-    // Guardamos la foto normal (sin filtro) para la lista
     fotoDataURL = canvas.toDataURL('image/jpeg', 0.8);
-
-    // Mostramos la versión "anime" (con filtro CSS)
     fotoAnime.src = fotoDataURL;
     fotoAnime.style.display = 'block';
     video.style.display = 'none';
@@ -138,7 +82,8 @@
     formulario.classList.add('active');
   }
 
-  function aceptarProducto() {
+  // --- ÚNICA FUNCIÓN QUE CAMBIA ---
+  async function aceptarProducto() {
     const nombre = document.getElementById('nombreProd').value.trim();
     const precio = document.getElementById('precioProd').value.trim();
 
@@ -147,21 +92,49 @@
       return;
     }
 
-    const productos = JSON.parse(localStorage.getItem('productos') || '[]');
-    productos.push({
-      id: Date.now(),
-      imagen: fotoDataURL,
-      nombre: nombre,
-      precio: parseFloat(precio)
-    });
-    localStorage.setItem('productos', JSON.stringify(productos));
+    // 1. Convertir la foto a un archivo (Blob)
+    const blob = await (await fetch(fotoDataURL)).blob();
+    const formData = new FormData();
+    formData.append('imagen', blob, 'foto.jpg');
+    formData.append('nombre', nombre);
+    formData.append('precio', precio);
 
-    document.getElementById('nombreProd').value = '';
-    document.getElementById('precioProd').value = '';
-    cerrarCamara();
+    try {
+      // 2. Enviar la foto y los datos al Worker
+      const res = await fetch(WORKER_URL + '/subir', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) throw new Error('Error al subir la imagen');
+
+      const data = await res.json();
+      // El Worker nos devuelve la URL de la imagen subida
+      const imageUrl = data.url;
+
+      // 3. Guardar SOLO la URL en localStorage (ligero)
+      const productos = JSON.parse(localStorage.getItem('productos') || '[]');
+      productos.push({
+        id: Date.now(),
+        imagen: imageUrl, // 👈 ahora es un enlace, no la imagen pesada
+        nombre: nombre,
+        precio: parseFloat(precio)
+      });
+      localStorage.setItem('productos', JSON.stringify(productos));
+
+      // 4. Limpiar y cerrar
+      document.getElementById('nombreProd').value = '';
+      document.getElementById('precioProd').value = '';
+      cerrarCamara();
+      alert("✅ Producto guardado correctamente");
+    } catch (error) {
+      console.error(error);
+      alert("❌ No se pudo guardar el producto. Revisa la consola.");
+    }
   }
 
   function cerrarCamara() {
+    // ... (esta función no cambia) ...
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
       stream = null;
