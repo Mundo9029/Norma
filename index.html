@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Captura de Productos</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; padding: 20px;
+  }
+  h1 { text-shadow: 2px 2px 6px rgba(0,0,0,.3); }
+
+  .btn-menu {
+    width: 260px; padding: 18px; margin: 10px;
+    font-size: 18px; font-weight: bold; cursor: pointer;
+    border: none; border-radius: 14px;
+    background: #fff; color: #764ba2;
+    box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    transition: transform .2s, box-shadow .2s;
+  }
+  .btn-menu:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
+
+  /* Modal cámara */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; z-index: 100; padding: 15px;
+  }
+  .overlay.active { display: flex; }
+
+  video, canvas, .anime-img {
+    max-width: 90vw; max-height: 55vh;
+    border-radius: 16px; box-shadow: 0 0 30px rgba(255,255,255,.3);
+  }
+  /* Estilo "anime" para la foto capturada */
+  .anime-img {
+    filter: saturate(1.7) contrast(1.25) brightness(1.1);
+    border: 4px solid #ff6ec7;
+    box-shadow: 0 0 25px #ff6ec7, 0 0 60px #b06ab3;
+  }
+  .modal-controls { margin-top: 15px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  .modal-controls button, .form-captura button {
+    padding: 12px 24px; border: none; border-radius: 10px;
+    font-size: 16px; font-weight: bold; cursor: pointer;
+  }
+  .btn-tomar { background: #ff6ec7; color: #fff; }
+  .btn-cancelar { background: #555; color: #fff; }
+  .btn-aceptar { background: #2ecc71; color: #fff; }
+
+  .form-captura {
+    display: none; flex-direction: column; align-items: center; gap: 12px;
+    margin-top: 15px; width: 320px; max-width: 90vw;
+  }
+  .form-captura.active { display: flex; }
+  .form-captura input {
+    width: 100%; padding: 12px; border-radius: 10px;
+    border: none; font-size: 16px; outline: none;
+  }
+  .form-captura label { align-self: flex-start; font-weight: bold; }
+</style>
+</head>
+<body>
+
+  <h1>📸 Mis Productos</h1>
+  <button class="btn-menu" onclick="abrirCamara()">📷 Tomar foto a producto</button>
+  <button class="btn-menu" onclick="window.location.href='productos.html'">📋 Ver productos</button>
+
+  <!-- Modal de cámara -->
+  <div class="overlay" id="overlay">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <img id="fotoAnime" class="anime-img" style="display:none;">
+
+    <div class="modal-controls" id="controlesCaptura">
+      <button class="btn-tomar" onclick="tomarFoto()">📸 Tomar foto</button>
+      <button class="btn-cancelar" onclick="cerrarCamara()">✖ Cancelar</button>
+    </div>
+
+    <div class="form-captura" id="formulario">
+      <label>Nombre del producto:</label>
+      <input type="text" id="nombreProd" placeholder="Ej: Camiseta">
+      <label>Precio:</label>
+      <input type="number" id="precioProd" placeholder="Ej: 15000" min="0">
+      <div class="modal-controls">
+        <button class="btn-aceptar" onclick="aceptarProducto()">✅ Aceptar</button>
+        <button class="btn-cancelar" onclick="cerrarCamara()">✖ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let stream = null;
+  let fotoDataURL = "";
+
+  const overlay = document.getElementById('overlay');
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const fotoAnime = document.getElementById('fotoAnime');
+  const formulario = document.getElementById('formulario');
+  const controlesCaptura = document.getElementById('controlesCaptura');
+
+  async function abrirCamara() {
+    overlay.classList.add('active');
+    formulario.classList.remove('active');
+    controlesCaptura.style.display = 'flex';
+    video.style.display = 'block';
+    fotoAnime.style.display = 'none';
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = stream;
+    } catch (err) {
+      alert("No se pudo acceder a la cámara: " + err.message);
+      cerrarCamara();
+    }
+  }
+
+  function tomarFoto() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    // Guardamos la foto normal (sin filtro) para la lista
+    fotoDataURL = canvas.toDataURL('image/jpeg', 0.8);
+
+    // Mostramos la versión "anime" (con filtro CSS)
+    fotoAnime.src = fotoDataURL;
+    fotoAnime.style.display = 'block';
+    video.style.display = 'none';
+    controlesCaptura.style.display = 'none';
+    formulario.classList.add('active');
+  }
+
+  function aceptarProducto() {
+    const nombre = document.getElementById('nombreProd').value.trim();
+    const precio = document.getElementById('precioProd').value.trim();
+
+    if (!nombre || !precio) {
+      alert("Por favor completa el nombre y el precio.");
+      return;
+    }
+
+    const productos = JSON.parse(localStorage.getItem('productos') || '[]');
+    productos.push({
+      id: Date.now(),
+      imagen: fotoDataURL,
+      nombre: nombre,
+      precio: parseFloat(precio)
+    });
+    localStorage.setItem('productos', JSON.stringify(productos));
+
+    document.getElementById('nombreProd').value = '';
+    document.getElementById('precioProd').value = '';
+    cerrarCamara();
+  }
+
+  function cerrarCamara() {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    overlay.classList.remove('active');
+    formulario.classList.remove('active');
+    fotoAnime.style.display = 'none';
+    video.style.display = 'block';
+  }
+</script>
+</body>
+</html>
