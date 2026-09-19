@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lista de Productos</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+  body {
+    margin: 0; min-height: 100vh; padding: 25px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+  }
+  h1 { text-align: center; text-shadow: 2px 2px 6px rgba(0,0,0,.3); }
+
+  .top-bar {
+    max-width: 900px; margin: 0 auto 20px;
+    display: flex; gap: 12px; flex-wrap: wrap;
+  }
+  .buscador {
+    flex: 1; min-width: 200px;
+    padding: 14px 18px; border: none; border-radius: 12px;
+    font-size: 16px; outline: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  }
+  .btn-volver {
+    padding: 14px 22px; border: none; border-radius: 12px;
+    background: #fff; color: #764ba2; font-weight: bold;
+    cursor: pointer; font-size: 15px;
+  }
+
+  .contenedor {
+    max-width: 900px; margin: 0 auto;
+    background: rgba(255,255,255,.12);
+    border-radius: 16px; padding: 15px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 12px; text-align: left; }
+  th {
+    background: rgba(255,255,255,.2);
+    border-bottom: 2px solid rgba(255,255,255,.4);
+  }
+  tr:not(:last-child) td { border-bottom: 1px solid rgba(255,255,255,.15); }
+  td img {
+    width: 70px; height: 70px; object-fit: cover;
+    border-radius: 10px; border: 2px solid #ff6ec7;
+    filter: saturate(1.5) contrast(1.2);
+  }
+
+  .acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-editar, .btn-borrar {
+    padding: 8px 14px; border: none; border-radius: 8px;
+    cursor: pointer; font-weight: bold; font-size: 14px;
+  }
+  .btn-editar { background: #f39c12; color: #fff; }
+  .btn-borrar { background: #e74c3c; color: #fff; }
+
+  .vacio { text-align: center; padding: 40px; opacity: .8; }
+
+  /* Modal de edición */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.8);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .overlay.active { display: flex; }
+  .modal {
+    background: #fff; color: #333; padding: 25px;
+    border-radius: 16px; width: 340px; max-width: 90vw;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal h2 { margin: 0 0 6px; color: #764ba2; }
+  .modal input {
+    padding: 12px; border-radius: 10px;
+    border: 2px solid #ddd; font-size: 16px; outline: none;
+  }
+  .modal-botones { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+  .modal-botones button {
+    padding: 10px 20px; border: none; border-radius: 10px;
+    cursor: pointer; font-weight: bold;
+  }
+  .btn-guardar { background: #2ecc71; color: #fff; }
+  .btn-cancelar { background: #ccc; color: #333; }
+</style>
+</head>
+<body>
+
+  <h1>📋 Lista de Productos</h1>
+
+  <div class="top-bar">
+    <input type="text" class="buscador" id="buscador" placeholder="🔍 Buscar producto por nombre..." oninput="renderizar()">
+    <button class="btn-volver" onclick="window.location.href='index.html'">⬅ Volver</button>
+  </div>
+
+  <div class="contenedor">
+    <table>
+      <thead>
+        <tr>
+          <th>Imagen</th>
+          <th>Nombre</th>
+          <th>Precio</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="cuerpoTabla"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal editar -->
+  <div class="overlay" id="overlayEditar">
+    <div class="modal">
+      <h2>✏️ Editar producto</h2>
+      <input type="text" id="editNombre" placeholder="Nombre">
+      <input type="number" id="editPrecio" placeholder="Precio" min="0">
+      <div class="modal-botones">
+        <button class="btn-cancelar" onclick="cerrarEditar()">Cancelar</button>
+        <button class="btn-guardar" onclick="guardarEdicion()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let productos = JSON.parse(localStorage.getItem('productos') || '[]');
+  let idEditando = null;
+
+  const cuerpoTabla = document.getElementById('cuerpoTabla');
+  const buscador = document.getElementById('buscador');
+  const overlayEditar = document.getElementById('overlayEditar');
+
+  function renderizar() {
+    const filtro = buscador.value.toLowerCase().trim();
+    const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(filtro));
+
+    if (filtrados.length === 0) {
+      cuerpoTabla.innerHTML = `<tr><td colspan="4" class="vacio">No hay productos${filtro ? ' que coincidan con la búsqueda' : ''}.</td></tr>`;
+      return;
+    }
+
+    cuerpoTabla.innerHTML = filtrados.map(p => `
+      <tr>
+        <td><img src="${p.imagen}" alt="${p.nombre}"></td>
+        <td>${p.nombre}</td>
+        <td>$${Number(p.precio).toLocaleString()}</td>
+        <td>
+          <div class="acciones">
+            <button class="btn-editar" onclick="abrirEditar(${p.id})">✏️ Editar</button>
+            <button class="btn-borrar" onclick="borrarProducto(${p.id})">🗑️ Borrar</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function abrirEditar(id) {
+    const prod = productos.find(p => p.id === id);
+    if (!prod) return;
+    idEditando = id;
+    document.getElementById('editNombre').value = prod.nombre;
+    document.getElementById('editPrecio').value = prod.precio;
+    overlayEditar.classList.add('active');
+  }
+
+  function cerrarEditar() {
+    overlayEditar.classList.remove('active');
+    idEditando = null;
+  }
+
+  function guardarEdicion() {
+    const nombre = document.getElementById('editNombre').value.trim();
+    const precio = document.getElementById('editPrecio').value.trim();
+    if (!nombre || !precio) { alert("Completa todos los campos."); return; }
+
+    const idx = productos.findIndex(p => p.id === idEditando);
+    if (idx !== -1) {
+      productos[idx].nombre = nombre;
+      productos[idx].precio = parseFloat(precio);
+      localStorage.setItem('productos', JSON.stringify(productos));
+    }
+    cerrarEditar();
+    renderizar();
+  }
+
+  function borrarProducto(id) {
+    if (!confirm("¿Seguro que quieres borrar este producto?")) return;
+    productos = productos.filter(p => p.id !== id);
+    localStorage.setItem('productos', JSON.stringify(productos));
+    renderizar();
+  }
+
+  renderizar();
+</script>
+</body>
+</html>
